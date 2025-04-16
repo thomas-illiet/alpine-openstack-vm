@@ -27,6 +27,7 @@ $ELEVATE ./alpine-make-vm-image \
     --image-size 1G \
     --repositories-file ../openstack/repositories \
     --packages "$(cat ../openstack/packages)" \
+    --keys-dir ../openstack/keys \
     --script-chroot \
     alpine-openstack.qcow2 -- ../openstack/configure.sh "$CLOUD_CONFIG_FILE"
 
