@@ -34,10 +34,11 @@ the password `passw0rd` (username `alpine`).
 You can create the VM with:
 
 ```powershell
-PS>  New-VM -Name debug -MemoryStartupBytes 2GB -Path . -BootDevice VHD -VHDPath .\alpine-openstack.vhdx -SwitchName "Default Switch" -Generation 1
+PS> Resize-VHD -Path .\alpine-openstack.vhdx -SizeBytes 20GB
+PS> New-VM -Name debug -MemoryStartupBytes 2GB -Path . -BootDevice VHD -VHDPath .\alpine-openstack.vhdx -SwitchName "Default Switch" -Generation 1
 PS> Set-VMDvdDrive -VMName debug -Path .\seed.iso
 PS> Start-VM debug
-PS> Get-NetNeighbor -LinkLayerAddress 00-15-5d-*
+PS> Get-NetNeighbor -State Reachable -LinkLayerAddress 00-15-5d-*
 
 ifIndex IPAddress             LinkLayerAddress      State       PolicyStore
 ------- ---------             ----------------      -----       -----------

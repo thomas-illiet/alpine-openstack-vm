@@ -31,33 +31,19 @@ jobs:
 
       - name: Build image
         run: |
-          wget https://raw.githubusercontent.com/alpinelinux/alpine-make-vm-image/v0.12.0/alpine-make-vm-image \
-            && echo '75aafcb883155bcaad9ad0dadb3e22e082152c1e  alpine-make-vm-image' | sha1sum -c \
-            || exit 1
-          chmod +x ./alpine-make-vm-image
-          sudo ./alpine-make-vm-image \
-              --image-format qcow2 \
-              --image-size 1G \
-              --repositories-file openstack/repositories \
-              --packages "$(cat openstack/packages)" \
-              --script-chroot \
-              alpine-openstack.qcow2 -- ./openstack/configure.sh
-          sha256sum alpine-openstack.qcow2 > SHA256SUMS
-          qemu-img convert alpine-openstack.qcow2 -O vhdx -o subformat=dynamic alpine-openstack.vhdx
-          (cd nocloud; genisoimage  -output ../seed.iso -volid cidata -joliet -rock user-data meta-data; )
-          sha256sum alpine-openstack.vhdx seed.iso >> SHA256SUMS
+          ./build.sh
       - name: Upload QCOW2 root fs artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: alpine-openstack.qcow2
-          path: "${{ github.workspace }}/alpine-openstack.qcow2"
+          path: "${{ github.workspace }}/build/alpine-openstack.qcow2"
       - name: Upload VHDX root fs artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: alpine-openstack.vhdx
           path: |
-            alpine-openstack.vhdx
-            seed.iso
+            build/alpine-openstack.vhdx
+            build/seed.iso
       - name: Make Development release
         uses: "marvinpinto/action-automatic-releases@latest"
         if: ${{ github.ref == 'refs/heads/main' }}
@@ -67,10 +53,10 @@ jobs:
           prerelease: true
           title: "Development Build"
           files: |
-            alpine-openstack.qcow2
-            alpine-openstack.vhdx
-            seed.iso
-            SHA256SUMS
+            build/alpine-openstack.qcow2
+            build/alpine-openstack.vhdx
+            build/seed.iso
+            build/SHA256SUMS
   test-image:
     name: Test produced image
     runs-on: ubuntu-latest
@@ -88,7 +74,7 @@ jobs:
         with:
           python-version: "3.11"
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: alpine-openstack.qcow2
       - name: Apply plan

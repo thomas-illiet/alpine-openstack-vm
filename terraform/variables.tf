@@ -4,6 +4,12 @@ variable "image_name" {
   default     = "alpine-openstack"
 }
 
+variable "image_path" {
+  type        = string
+  description = "Path to image"
+  default     = "../alpine-openstack.qcow2"
+}
+
 variable "instance_name" {
   type        = string
   description = "instance name"

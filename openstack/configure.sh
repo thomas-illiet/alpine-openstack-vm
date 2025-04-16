@@ -7,6 +7,8 @@ step() {
 }
 
 
+CLOUD_CONFIG_FILE=${1:-cloud-config.yaml}
+
 step 'Set up timezone'
 setup-timezone -z Europe/Paris
 
@@ -23,16 +25,16 @@ cat > /etc/network/interfaces <<-EOF
 EOF
 
 # FIXME: remove root and alpine password
-step 'Set cloud configuration'
+step "Set cloud configuration (with $CLOUD_CONFIG_FILE)"
 sed -e '/disable_root:/ s/true/false/' \
 	-e '/ssh_pwauth:/ s/0/no/' \
-    -e '/name: alpine/a \     passwd: "*"' \
+    -e '/name: alpine/a \    passwd: "*"' \
     -e '/lock_passwd:/ s/True/False/' \
     -e '/shell:/ s#/bin/ash#/bin/zsh#' \
     -i /etc/cloud/cloud.cfg
 
-# To have oh-my-zsh working on first boot
-cat cloud-config.yaml >> /etc/cloud/cloud.cfg
+# Copy specific configuration
+cp "$CLOUD_CONFIG_FILE" /etc/cloud/cloud.cfg.d/90_user.cfg
 
 step 'Allow only key based ssh login'
 sed -e '/PermitRootLogin yes/d' \
@@ -55,11 +57,41 @@ sed -Ei \
 	/etc/rc.conf
 
 step 'Enabling zsh'
-cp -f /usr/share/oh-my-zsh/templates/zshrc.zsh-template /root/.zshrc
-chmod +x /root/.zshrc
+# Install ZSH pimp tools
+P10K_DIR="/usr/share/oh-my-zsh/custom/themes/powerlevel10k"
+if [ ! -d "$P10K_DIR" ]; then
+    wget -q https://github.com/romkatv/powerlevel10k/archive/refs/tags/v1.20.0.tar.gz -O /tmp/p10k.tar.gz
+    tar xzf /tmp/p10k.tar.gz -C /tmp
+    mv /tmp/powerlevel10k-1.20.0 "$P10K_DIR"
+    rm /tmp/p10k.tar.gz
+fi
+ATSG_DIR="/usr/share/oh-my-zsh/custom/plugins/zsh-autosuggestions"
+if [ ! -d "$ATSG_DIR" ]; then
+    wget -q https://github.com/zsh-users/zsh-autosuggestions/archive/refs/tags/v0.7.1.tar.gz -O /tmp/atsg.tar.gz
+    tar xzf /tmp/atsg.tar.gz -C /tmp
+    mv /tmp/zsh-autosuggestions-0.7.1 "$ATSG_DIR"
+    rm /tmp/atsg.tar.gz
+fi
+
+sed -e 's#^export ZSH=.*#export ZSH=/usr/share/oh-my-zsh#g' \
+    -e '/^plugins=/ s#.*#plugins=(git zsh-autosuggestions)#' \
+    -e '/^ZSH_THEME=/ s#.*#ZSH_THEME="powerlevel10k/powerlevel10k"#' \
+    -e '$a[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh' \
+    -i /usr/share/oh-my-zsh/templates/zshrc.zsh-template
+
+install -m 700 -o root -g root /usr/share/oh-my-zsh/templates/zshrc.zsh-template /root/.zshrc
+install -m 740 -o root -g root p10k.zsh /root/.p10k.zsh
+
 sed -ie '/^root:/ s#:/bin/.*$#:/bin/zsh#' /etc/passwd
 
-# see https://gitlab.alpinelinux.org/alpine/aports/-/issues/8861
+step 'Enabling oh-my-zsh for all users'
+mkdir -p /etc/skel
+install -m 700 -o root -g root /usr/share/oh-my-zsh/templates/zshrc.zsh-template /etc/skel/.zshrc
+install --directory -o root -g root -m 0700 /etc/skel/.ssh
+install -m 740 -o root -g root p10k.zsh /etc/skel/.p10k.zsh
+
+
+# see https://gitlab.alpinelinux.org/alpine/aports/-/issues/88²61
 step 'Enable cloud-init configuration via NoCloud iso image'
 
 echo "iso9660" >> /etc/filesystems
@@ -71,6 +103,8 @@ rc-update add crond default
 rc-update add networking boot
 rc-update add termencoding boot
 rc-update add sshd default
+rc-update add cloud-init-ds-identify default
+rc-update add cloud-init-local default
 rc-update add cloud-init default
 rc-update add cloud-config default
 rc-update add cloud-final default

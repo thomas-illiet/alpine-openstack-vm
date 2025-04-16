@@ -5,3 +5,8 @@
 *.tfstate.backup
 *.tfstate.*.backup
 *.qcow2
+*.vhdx
+alpine-make-vm-image
+seed.iso
+SHA256SUMS
+build/
