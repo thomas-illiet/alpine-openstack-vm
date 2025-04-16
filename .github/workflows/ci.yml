@@ -4,13 +4,24 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: "Name of the image to build"
+        required: true
+        default: alpine-openstack
+        type: string
 
 jobs:
   build:
     name: Build image
     runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ${{ github.event.inputs.image_name }}
     steps:
+      - name: Set default image name
+        if: env.IMAGE_NAME == null
+        run: echo "IMAGE_NAME=alpine-openstack" >> $GITHUB_ENV
       - name: Install qemu-utils
         run: |
           sudo apt-get update
@@ -20,33 +31,19 @@ jobs:
 
       - name: Build image
         run: |
-          wget https://raw.githubusercontent.com/alpinelinux/alpine-make-vm-image/v0.12.0/alpine-make-vm-image \
-            && echo '75aafcb883155bcaad9ad0dadb3e22e082152c1e  alpine-make-vm-image' | sha1sum -c \
-            || exit 1
-          chmod +x ./alpine-make-vm-image
-          sudo ./alpine-make-vm-image \
-              --image-format qcow2 \
-              --image-size 1G \
-              --repositories-file openstack/repositories \
-              --packages "$(cat openstack/packages)" \
-              --script-chroot \
-              alpine-openstack.qcow2 -- ./openstack/configure.sh
-          sha256sum alpine-openstack.qcow2 > SHA256SUMS
-          qemu-img convert alpine-openstack.qcow2 -O vhdx -o subformat=dynamic alpine-openstack.vhdx
-          (cd nocloud; genisoimage  -output ../seed.iso -volid cidata -joliet -rock user-data meta-data; )
-          sha256sum alpine-openstack.vhdx seed.iso >> SHA256SUMS
+          ./build.sh
       - name: Upload QCOW2 root fs artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: alpine-openstack.qcow2
-          path: "${{ github.workspace }}/alpine-openstack.qcow2"
+          path: "${{ github.workspace }}/build/alpine-openstack.qcow2"
       - name: Upload VHDX root fs artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: alpine-openstack.vhdx
           path: |
-            alpine-openstack.vhdx
-            seed.iso
+            build/alpine-openstack.vhdx
+            build/seed.iso
       - name: Make Development release
         uses: "marvinpinto/action-automatic-releases@latest"
         if: ${{ github.ref == 'refs/heads/main' }}
@@ -56,15 +53,20 @@ jobs:
           prerelease: true
           title: "Development Build"
           files: |
-            alpine-openstack.qcow2
-            alpine-openstack.vhdx
-            seed.iso
-            SHA256SUMS
+            build/alpine-openstack.qcow2
+            build/alpine-openstack.vhdx
+            build/seed.iso
+            build/SHA256SUMS
   test-image:
     name: Test produced image
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_image_name: ${{ github.event.inputs.image_name }}
     needs: build
     steps:
+      - name: Set default image name
+        if: env.TF_VAR_image_name == null
+        run: echo "TF_VAR_image_name=alpine-openstack" >> $GITHUB_ENV
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
@@ -72,7 +74,7 @@ jobs:
         with:
           python-version: "3.11"
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: alpine-openstack.qcow2
       - name: Apply plan
@@ -99,9 +101,9 @@ jobs:
       - name: Save working image
         run: |
           python -m pip install python-openstackclient
-          openstack image delete alpine-openstack-backup || /bin/true
-          openstack image set --name alpine-openstack-backup alpine-openstack-latest || /bin/true
-          openstack image set --name alpine-openstack-latest alpine-openstack
+          openstack image delete ${TF_VAR_image_name}-backup || /bin/true
+          openstack image set --name ${TF_VAR_image_name}-backup ${TF_VAR_image_name}-latest || /bin/true
+          openstack image set --name ${TF_VAR_image_name}-latest ${TF_VAR_image_name}
         env:
           OS_CLOUD: openstack
       - name: Destroy the test VM

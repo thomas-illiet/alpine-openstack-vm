@@ -6,8 +6,8 @@
 // Create new image from current
 resource "openstack_images_image_v2" "alpine" {
   provider         = openstack.ovh
-  name             = "alpine-openstack"
-  local_file_path  = "../alpine-openstack.qcow2"
+  name             = var.image_name
+  local_file_path  = var.image_path
   container_format = "bare"
   disk_format      = "qcow2"
   visibility       = "private"
