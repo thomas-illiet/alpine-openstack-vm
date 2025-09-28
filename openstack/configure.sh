@@ -90,6 +90,14 @@ install -m 700 -o root -g root /usr/share/oh-my-zsh/templates/zshrc.zsh-template
 install --directory -o root -g root -m 0700 /etc/skel/.ssh
 install -m 740 -o root -g root p10k.zsh /etc/skel/.p10k.zsh
 
+# Create Docker configuration
+mkdir -p /etc/docker
+cat <<EOF > "$DOCKER_CONFIG"
+{
+  "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2375"],
+  "iptables": false
+}
+EOF
 
 # see https://gitlab.alpinelinux.org/alpine/aports/-/issues/88²61
 step 'Enable cloud-init configuration via NoCloud iso image'
@@ -103,6 +111,7 @@ rc-update add crond default
 rc-update add networking boot
 rc-update add termencoding boot
 rc-update add sshd default
+rc-update add docker default
 rc-update add cloud-init-ds-identify default
 rc-update add cloud-init-local default
 rc-update add cloud-init default
