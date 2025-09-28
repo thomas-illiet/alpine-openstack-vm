@@ -29,11 +29,11 @@ $ELEVATE ./alpine-make-vm-image \
     --packages "$(cat ../openstack/packages)" \
     --keys-dir ../openstack/keys \
     --script-chroot \
-    alpine-openstack.qcow2 -- ../openstack/configure.sh "$CLOUD_CONFIG_FILE"
+    alpine-docker.qcow2 -- ../openstack/configure.sh "$CLOUD_CONFIG_FILE"
 
-sha256sum alpine-openstack.qcow2 > SHA256SUMS
-qemu-img convert alpine-openstack.qcow2 -O vhdx -o subformat=dynamic alpine-openstack.vhdx
+sha256sum alpine-docker.qcow2 > SHA256SUMS
+qemu-img convert alpine-docker.qcow2 -O vhdx -o subformat=dynamic alpine-docker.vhdx
 (cd ../nocloud; genisoimage  -output ../build/seed.iso -volid CIDATA -joliet -rock user-data meta-data; )
-sha256sum alpine-openstack.vhdx seed.iso >> SHA256SUMS
+sha256sum alpine-docker.vhdx seed.iso >> SHA256SUMS
 
 
