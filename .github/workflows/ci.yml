@@ -9,7 +9,7 @@ on:
       image_name:
         description: "Name of the image to build"
         required: true
-        default: alpine-openstack
+        default: alpine-docker
         type: string
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Set default image name
         if: env.IMAGE_NAME == null
-        run: echo "IMAGE_NAME=alpine-openstack" >> $GITHUB_ENV
+        run: echo "IMAGE_NAME=alpine-docker" >> $GITHUB_ENV
       - name: Install qemu-utils
         run: |
           sudo apt-get update
@@ -35,14 +35,14 @@ jobs:
       - name: Upload QCOW2 root fs artifact
         uses: actions/upload-artifact@v4
         with:
-          name: alpine-openstack.qcow2
-          path: "${{ github.workspace }}/build/alpine-openstack.qcow2"
+          name: alpine-docker.qcow2
+          path: "${{ github.workspace }}/build/alpine-docker.qcow2"
       - name: Upload VHDX root fs artifact
         uses: actions/upload-artifact@v4
         with:
-          name: alpine-openstack.vhdx
+          name: alpine-docker.vhdx
           path: |
-            build/alpine-openstack.vhdx
+            build/alpine-docker.vhdx
             build/seed.iso
       - name: Make Development release
         uses: "marvinpinto/action-automatic-releases@latest"
@@ -53,63 +53,7 @@ jobs:
           prerelease: true
           title: "Development Build"
           files: |
-            build/alpine-openstack.qcow2
-            build/alpine-openstack.vhdx
+            build/alpine-docker.qcow2
+            build/alpine-docker.vhdx
             build/seed.iso
             build/SHA256SUMS
-  test-image:
-    name: Test produced image
-    runs-on: ubuntu-latest
-    env:
-      TF_VAR_image_name: ${{ github.event.inputs.image_name }}
-    needs: build
-    steps:
-      - name: Set default image name
-        if: env.TF_VAR_image_name == null
-        run: echo "TF_VAR_image_name=alpine-openstack" >> $GITHUB_ENV
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: alpine-openstack.qcow2
-      - name: Apply plan
-        id: apply_plan
-        run: |
-          cd terraform
-          mkdir -p $HOME/.config/openstack
-          echo -n "${{ secrets.cloud_config }}" | openssl base64 -d -A > $HOME/.config/openstack/clouds.yaml
-          echo -e "${{ secrets.TERRAFORM_VARS }}" | openssl base64 -d -A > terraform.tfvars
-          terraform init
-          terraform apply -auto-approve
-          echo "instance_ipv4=$(terraform output -raw instance_ipv4)" >> $GITHUB_OUTPUT
-        env:
-          OS_CLOUD: openstack
-      - name: Test connectivity of the server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ steps.apply_plan.outputs.instance_ipv4 }}
-          username: root
-          debug: true
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            apk update && apk upgrade
-      - name: Save working image
-        run: |
-          python -m pip install python-openstackclient
-          openstack image delete ${TF_VAR_image_name}-backup || /bin/true
-          openstack image set --name ${TF_VAR_image_name}-backup ${TF_VAR_image_name}-latest || /bin/true
-          openstack image set --name ${TF_VAR_image_name}-latest ${TF_VAR_image_name}
-        env:
-          OS_CLOUD: openstack
-      - name: Destroy the test VM
-        run: |
-          cd terraform
-          terraform state rm openstack_images_image_v2.alpine
-          terraform destroy -auto-approve
-        env:
-          OS_CLOUD: openstack
